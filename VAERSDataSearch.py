@@ -35,12 +35,21 @@ def choose_excel_file():
     for file in excel_files_in_directory:
         print(f"{i}: {file}")
         i += 1
-    load_current_file = pyip.inputMenu(['Yes', 'No'], "\nDo you want to pick one of these files?\n", numbered=True)
+    load_current_file = pyip.inputMenu(['Yes', 'No'],
+                                       "\nDo you want to pick one of these files to load for the output file?\n",
+                                       numbered=True)
     if load_current_file == 'Yes':
         output = pyip.inputMenu(excel_files_in_directory, numbered=True)
         return output
     else:
         return 'None'
+
+def choose_workbook(message):
+    """Asking the user to clarify which excel correlates to VAX ID and which to VAX Reports data."""
+    files = glob.glob('*xlsx')
+    print(message)
+    output = pyip.inputMenu(files, numbered=True)
+    return output
 
 # Setting up a dictionary to read all the VAX data into.
 vax_data_initial = {}
@@ -51,7 +60,7 @@ data_date = get_user_input("What's the date for this data (it's in the name of t
 # Using the name of the VAX and the Vax type as the key and adding the id numbers as a list of values.
 # key(VAX_MANU, VAX_TYPE): value([VAERS_ID])
 # Column A: VAERS_ID; Column B: VAX_TYPE; Column C: VAX_MANU(facturer)
-vax_data_file = 'test.xlsx'
+vax_data_file = choose_workbook('Which file has the vaccine ID information (Ex: 20XYVAERSVAX)?')
 vax_data_wb = openpyxl.load_workbook(vax_data_file)
 vax_data_sheet = vax_data_wb.active
 for row in range(2, vax_data_sheet.max_row + 1):
@@ -73,7 +82,7 @@ vax_data_wb.close()
 # Column A: VAERS_ID; Column G: SEX; Column J: DIED; Column U: NUMDAYS
 # The data uses a 'Y' to denote "DIED"
 vax_reports = {}
-vax_reports_file = "test_data.xlsx"
+vax_reports_file = choose_workbook("Which file has the vaccine report data (Ex: 20XYVAERSDATA)?")
 vax_reports_wb = openpyxl.load_workbook(vax_reports_file)
 vax_reports_wb_sheet = vax_reports_wb.active
 for row in range(2, vax_reports_wb_sheet.max_row + 1):
@@ -107,12 +116,11 @@ output_wb_sheet['A2'] = "Vaccine Type"
 output_wb_sheet['B2'] = "Number of Reports"
 output_wb_sheet['C2'] = "Deaths Reported"
 output_wb_sheet['D2'] = "Male Deaths Reported"
-row_to_write_to = 3
 
 # Setting up variables for finding the total deaths and total deaths attributed to COVID vaccines.
 total_deaths = 0
 total_deaths_covid_vax = 0
-non_covid_vax_deaths = total_deaths - total_deaths_covid_vax
+vaccine_data_list = []
 
 # Go through and compare each vax ID by manufacturer and type and see how many deaths
 # are associated with each.
@@ -133,24 +141,30 @@ for vaccine_type in vax_data_initial:
     if vaccine_type.endswith('COVID19'):
         total_deaths_covid_vax += total_reported_deaths
 
-    # Write values to Excel.
-    output_wb_sheet[f'A{row_to_write_to}'] = vaccine_type
-    output_wb_sheet[f'B{row_to_write_to}'] = total_reported_occurrences
-    output_wb_sheet[f'C{row_to_write_to}'] = total_reported_deaths
-    output_wb_sheet[f'D{row_to_write_to}'] = male_deaths
-    row_to_write_to += 1
+    vaccine_data_list.append([total_reported_deaths, vaccine_type, total_reported_occurrences, male_deaths])
 
-# Moving this variable here to avoid division by zero error.
-percent_of_deaths_attributed_to_covid_vax = 0
+row_to_write_to = 3
+# Sort the list by reported deaths and write to Excel.
+sorted_vaccine_data = sorted(vaccine_data_list, reverse=True)
+for vaccine in sorted_vaccine_data:
+    # Write values to Excel.
+    output_wb_sheet[f'A{row_to_write_to}'] = vaccine[1]
+    output_wb_sheet[f'B{row_to_write_to}'] = vaccine[2]
+    output_wb_sheet[f'C{row_to_write_to}'] = vaccine[0]
+    output_wb_sheet[f'D{row_to_write_to}'] = vaccine[3]
+    row_to_write_to += 1
 
 output_wb_sheet['F2'] = "Total Deaths"
 output_wb_sheet['F3'] = total_deaths
 output_wb_sheet['F5'] = "COVID19 Vaccine Deaths"
 output_wb_sheet['F6'] = total_deaths_covid_vax
 output_wb_sheet['F8'] = "Non-COVID Vaccine Deaths"
-output_wb_sheet['F9'] = non_covid_vax_deaths
+output_wb_sheet['F9'] = total_deaths - total_deaths_covid_vax
 output_wb_sheet['F11'] = "COVID19 Vaccine Deaths / Total Deaths"
-output_wb_sheet['F12'] = "{:.2%}".format(percent_of_deaths_attributed_to_covid_vax)
+if total_deaths == 0:
+    output_wb_sheet['F12'] = 0
+else:
+    output_wb_sheet['F12'] = "{:.2%}".format(total_deaths_covid_vax / total_deaths)
 
 # Clean up the spreadsheet.
 sheets = output_wb.sheetnames
