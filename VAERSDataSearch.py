@@ -63,17 +63,14 @@ data_date = get_user_input("What's the date for this data (it's in the name of t
 vax_data_file = choose_workbook('Which file has the vaccine ID information (Ex: 20XYVAERSVAX)?')
 vax_data_wb = openpyxl.load_workbook(vax_data_file)
 vax_data_sheet = vax_data_wb.active
-for row in range(2, vax_data_sheet.max_row + 1):
+for row in range(2, vax_data_sheet.max_row + 1):  # Start at #2 to skip over the header.
     # Get the values of the pertinent cells
-    manufacturer = vax_data_sheet[f'C{row}'].value
-    vax_type = vax_data_sheet[f'B{row}'].value
     vax_ID = vax_data_sheet[f'A{row}'].value
-    dict_key = f'{manufacturer}, {vax_type}'
-    if dict_key in vax_data_initial:
-        vax_data_initial[dict_key].append(vax_ID)
+    vax_name = vax_data_sheet[f'H{row}'].value
+    if vax_name in vax_data_initial:
+        vax_data_initial[vax_name].append(vax_ID)
     else:
-        vax_data_initial[dict_key] = [vax_data_sheet[f'A{row}'].value]
-        # dictionary_keys.append(dict_key)
+        vax_data_initial[vax_name] = [vax_data_sheet[f'A{row}'].value]
 
 vax_data_wb.close()
 
@@ -89,13 +86,14 @@ for row in range(2, vax_reports_wb_sheet.max_row + 1):
     vax_report_ID = vax_reports_wb_sheet[f'A{row}'].value
     vax_reported_died = 0
     vax_reported_male = 0
+    reported_age = vax_reports_wb_sheet[f'D{row}'].value
     reported_died = vax_reports_wb_sheet[f'J{row}'].value
     reported_male = vax_reports_wb_sheet[f'G{row}'].value
     if reported_died == 'Y':
         vax_reported_died += 1
     if reported_male == 'M':
         vax_reported_male += 1
-    vax_reports[vax_report_ID] = [vax_reported_died, vax_reported_male]
+    vax_reports[vax_report_ID] = [vax_reported_died, vax_reported_male, reported_age]
 
 vax_reports_wb.close()
 
@@ -116,11 +114,15 @@ output_wb_sheet['A2'] = "Vaccine Type"
 output_wb_sheet['B2'] = "Number of Reports"
 output_wb_sheet['C2'] = "Deaths Reported"
 output_wb_sheet['D2'] = "Male Deaths Reported"
+output_wb_sheet['E2'] = "Average Age of Reported Death"
 
 # Setting up variables for finding the total deaths and total deaths attributed to COVID vaccines.
 total_deaths = 0
 total_deaths_covid_vax = 0
 vaccine_data_list = []
+
+# A variable for counting the reports that have no age.
+number_with_no_reported_age = 0
 
 # Go through and compare each vax ID by manufacturer and type and see how many deaths
 # are associated with each.
@@ -128,20 +130,36 @@ for vaccine_type in vax_data_initial:
     # Setup variables to capture the data we're looking for.
     total_reported_occurrences = 0
     total_reported_deaths = 0
+    total_reported_deaths_for_average = 0
     male_deaths = 0
+    total_age_of_reported_deaths = 0
+    average_age_at_death = 0
     for vaccine_id in vax_data_initial[vaccine_type]:
         total_reported_occurrences += 1
         if vax_reports[vaccine_id][0] == 1:
             total_reported_deaths += 1
+
+            # Using a try/except block for records that do not have a recorded age.
+            try:
+                total_age_of_reported_deaths += vax_reports[vaccine_id][2]
+                total_reported_deaths_for_average += 1
+            except TypeError:
+                number_with_no_reported_age += 1
+                continue
         if vax_reports[vaccine_id][0] == 1 and vax_reports[vaccine_id][1] == 1:
             male_deaths += 1
 
     # Tally the total deaths and see if attributed to COVID VAX.
     total_deaths += total_reported_deaths
-    if vaccine_type.endswith('COVID19'):
+    try:
+        average_age_at_death = total_age_of_reported_deaths / total_reported_deaths_for_average
+    except ZeroDivisionError:
+        average_age_at_death = 0
+    if vaccine_type.__contains__('COVID19'):
         total_deaths_covid_vax += total_reported_deaths
 
-    vaccine_data_list.append([total_reported_deaths, vaccine_type, total_reported_occurrences, male_deaths])
+    vaccine_data_list.append([total_reported_deaths, vaccine_type, total_reported_occurrences, male_deaths,
+                              average_age_at_death])
 
 row_to_write_to = 3
 # Sort the list by reported deaths and write to Excel.
@@ -152,19 +170,22 @@ for vaccine in sorted_vaccine_data:
     output_wb_sheet[f'B{row_to_write_to}'] = vaccine[2]
     output_wb_sheet[f'C{row_to_write_to}'] = vaccine[0]
     output_wb_sheet[f'D{row_to_write_to}'] = vaccine[3]
+    output_wb_sheet[f'E{row_to_write_to}'] = int(vaccine[4])
     row_to_write_to += 1
 
-output_wb_sheet['F2'] = "Total Deaths"
-output_wb_sheet['F3'] = total_deaths
-output_wb_sheet['F5'] = "COVID19 Vaccine Deaths"
-output_wb_sheet['F6'] = total_deaths_covid_vax
-output_wb_sheet['F8'] = "Non-COVID Vaccine Deaths"
-output_wb_sheet['F9'] = total_deaths - total_deaths_covid_vax
-output_wb_sheet['F11'] = "COVID19 Vaccine Deaths / Total Deaths"
+output_wb_sheet['G2'] = "Total Deaths"
+output_wb_sheet['G3'] = total_deaths
+output_wb_sheet['G5'] = "COVID19 Vaccine Deaths"
+output_wb_sheet['G6'] = total_deaths_covid_vax
+output_wb_sheet['G8'] = "Non-COVID Vaccine Deaths"
+output_wb_sheet['G9'] = total_deaths - total_deaths_covid_vax
+output_wb_sheet['G11'] = "COVID19 Vaccine Deaths / Total Deaths"
 if total_deaths == 0:
-    output_wb_sheet['F12'] = 0
+    output_wb_sheet['G12'] = 0
 else:
-    output_wb_sheet['F12'] = "{:.2%}".format(total_deaths_covid_vax / total_deaths)
+    output_wb_sheet['G12'] = "{:.2%}".format(total_deaths_covid_vax / total_deaths)
+output_wb_sheet['G14'] = "Number with no Age"
+output_wb_sheet['G15'] = number_with_no_reported_age
 
 # Clean up the spreadsheet.
 sheets = output_wb.sheetnames
