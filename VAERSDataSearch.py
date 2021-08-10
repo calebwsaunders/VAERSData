@@ -60,7 +60,7 @@ data_date = get_user_input("What's the date for this data (it's in the name of t
 # Using the name of the VAX and the Vax type as the key and adding the id numbers as a list of values.
 # key(VAX_MANU, VAX_TYPE): value([VAERS_ID])
 # Column A: VAERS_ID; Column B: VAX_TYPE; Column C: VAX_MANU(facturer)
-vax_data_file = choose_workbook('Which file has the vaccine ID information (Ex: 20XYVAERSVAX)?')
+vax_data_file = choose_workbook('Which file has the vaccine ID information (Ex: VAERSVAX)?')
 vax_data_wb = openpyxl.load_workbook(vax_data_file)
 vax_data_sheet = vax_data_wb.active
 for row in range(2, vax_data_sheet.max_row + 1):  # Start at #2 to skip over the header.
@@ -76,10 +76,10 @@ vax_data_wb.close()
 
 # Matching the VAERS_ID with the vaccine type in vax_data_initial.
 # Will count if the person was reported to have died.
-# Column A: VAERS_ID; Column G: SEX; Column J: DIED; Column U: NUMDAYS
+# Column A: VAERS_ID; D: AGE; Column G: SEX; Column J: DIED
 # The data uses a 'Y' to denote "DIED"
 vax_reports = {}
-vax_reports_file = choose_workbook("Which file has the vaccine report data (Ex: 20XYVAERSDATA)?")
+vax_reports_file = choose_workbook("Which file has the vaccine report data (Ex: VAERSDATA)?")
 vax_reports_wb = openpyxl.load_workbook(vax_reports_file)
 vax_reports_wb_sheet = vax_reports_wb.active
 for row in range(2, vax_reports_wb_sheet.max_row + 1):
